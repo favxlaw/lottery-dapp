@@ -21,7 +21,7 @@ export default function Home() {
     }
   }, [lcContract]);
 
-  const updateState = () => {
+  const useEffect = () => {
     if (lcContract) {
       getPot();
      getPlayers();
