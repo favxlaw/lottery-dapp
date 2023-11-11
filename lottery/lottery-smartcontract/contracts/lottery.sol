@@ -82,6 +82,81 @@ contact LotteryGame is VRFConsumerBase{
     emit PrizeIncreased(lottery.lotteryId, lottery.prize);
 }
 
-    //
+    // Function for participants to withdraw their winnings or remaining funds
+        function withdraw(uint256 _lotteryId) external onlyInLottery(_lotteryId) onlyAfterEndTime(_lotteryId) {
+            lottery storage currentLottery = lotteries[_lotteryId];
+            require(currentLottery.state == LotteryState.Finished, "Lottery not finished");
+
+            unit256 tickets = ppplayer[_lotteryId][msg.sender];
+            require(tickets > 0, "No tickets to withdraw");
+
+            uint256 share = currentLottery.prize.div(playersCount{_lotteryId}); //Calculate participant's share
+            uint256 winnings = share.mul(tickets);
+
+            //Transfer winnings to the participant
+            payable(msg.sender).transfer(winnings);
+
+            // Reset the participant's ticket count
+            ppplayer[_lotteryId][msg.sender] =0;
+
+            emit PrizeIncreased(_lotteryId, currentLottery.prize.sub(winnings));
+        }
+
+    //Function to Intiate the lotttery drawing process
+    function startLottery(uint256 _lotteryId) external onlyAdmin onlyAfterEndTime(_lotteryId) {
+        lottery storage currentLottery = lotteries[_lotteryId];
+        require(currentLottery.state == LotteryState.Active, "Lottery not active");
+
+        bytes32 requestId = lotteryRandomness(keyHash, fee);
+        lotteryRandomnessRequest[requestId] = _lotteryId;
+
+        emit RandomnessReequested(requestId, _lotteryId);
+    }
+
+    //function to declare Winner 
+    function WinnerDeclared(uint256 _lotteryId, uint256 _randomness) external onlyAdmin{
+        lottery storage currentLottery = lotteries[_lotteryId];
+        require(currentLottery.state == LotteryState.Active, "Lottery not active" );
+        require(block.timestamp >= currentLottery.endTime, "Lottery has not ended");
+
+        address winner = pickWinner(_lotteryId, _randomness);
+
+        // Distribute prize to the winner
+        distributePrize(_lotteryId, winner);
+
+        // Update lottery state
+        currentLottery.state = LotteryState.Finished;
+
+        emit WinnerDeclared(_lotteryId, winner);
+    }
+
+//Function to retrieve the list of players 
+    function getPlayers(uint256 _lotteryId) external view returns (address[] memory) {
+    address[] memory players = new address[](playersCount[_lotteryId]);
+
+    uint256 index = 0;
+    for (uint256 i = 0; i < playersCount[_lotteryId]; i++) {
+        address player = getKeyByIndex(ppplayer[_lotteryId], i);
+        players[index] = player;
+        index++;
+    }
+
+    return players;
+}
+
+//Function to get Lottery Details function
+
+    function getLotteryDetails(uint256 _lotteryId) external view returns (uint256, uint256, uint256, uint256, LotteryState) {
+    lottery storage currentLottery = lotteries[_lotteryId];
+    return (
+        currentLottery.entryFee,
+        currentLottery.duration,
+        currentLottery.endTime,
+        currentLottery.prize,
+        currentLottery.state
+    );
+}
+
+
 }
 
